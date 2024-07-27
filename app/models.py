@@ -23,6 +23,7 @@ class Debt(Base):
         ("OWED_TO", "owed_to"),
         ("OWED_by", "owed_by")
     )
+    __tablename__ = 'debt'
     id = Column(Integer, primary_key=True)
     debt_type = Column(ChoiceType(choices=DEBT_STATUS), default='OWED_TO')
     person = Column(String)
