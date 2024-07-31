@@ -73,8 +73,8 @@ class DebtModel(BaseModel):
                 "amount": 13000,
                 "currency": "UZS",
                 "description": "Bu menda toyga deb olgan edi",
-                "received_or_given_time": "time",
-                "return_time": "time",
+                "received_or_given_time": "2024-04-00",
+                "return_time": "2024-04-2",
                 "setting_reminder_time_default": False
             }
         }

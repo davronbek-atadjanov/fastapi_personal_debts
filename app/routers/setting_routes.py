@@ -21,11 +21,6 @@ async def setting_get(Authorize: AuthJWT = Depends()):
     username = Authorize.get_jwt_subject()
     current_user = session.query(User).filter(User.username == username).first()
 
-    if not current_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User with username not found")
-
-    if not current_user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not active")
 
     setting = session.query(Setting).filter(Setting.user_id == current_user.id).first()
 
@@ -53,12 +48,6 @@ async def update_setting(update_data: SettingModel, Authorize: AuthJWT=Depends()
 
     username = Authorize.get_jwt_subject()
     current_user = session.query(User).filter(User.username == username).first()
-
-    if not current_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User with username not found")
-
-    if not current_user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not active")
 
     setting = session.query(Setting).filter(Setting.user_id == current_user.id).first()
     if setting:

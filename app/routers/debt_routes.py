@@ -92,11 +92,6 @@ async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends()):
 
     username = Authorize.get_jwt_subject()
     current_user = session.query(User).filter(User.username == username).first()
-    if not current_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User with username not found")
-
-    if not current_user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not active")
 
     debt = session.query(Debt).filter( Debt.id == id, Debt.user_id == current_user.id).first()
     debt_name_user = debt.debtname.name
@@ -183,6 +178,7 @@ async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: Aut
 
 @debt_router.get("/", status_code=status.HTTP_200_OK)
 async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: AuthJWT=Depends()):
+    """debt_type=(owed_to, owed_by, individual): /api/debts/?debt_type=owed_to """
     try:
         Authorize.jwt_required()
     except Exception as e:
@@ -193,18 +189,16 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
 
 
     if debt_type != 'individual':
-        # debt_type ni to'liq if-else operatori orqali xaritalash
         if debt_type == "owed_to":
             debt_type_code = "OWED_TO"
         elif debt_type == "owed_by":
             debt_type_code = "OWED_BY"
         else:
-            # Notog'ri qiymat berilgan bo'lsa, Exception chiqaramiz
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid debt_type")
 
         debts = session.query(Debt).filter(
             Debt.user_id == current_user.id,
-            Debt.debt_type == debt_type_code  # Compare against the code part
+            Debt.debt_type == debt_type_code
         ).all()
 
         if not debts:

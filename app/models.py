@@ -60,5 +60,4 @@ class Debt(Base):
     debtname = relationship('DebtName', back_populates='debts')  # Many-to-One munosabat
 
     # User bilan munosabat
-
     user = relationship('User', foreign_keys=[user_id], back_populates='debts', lazy='joined')
