@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, status, Depends, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException
 from app.models import User, DebtName, Debt, Setting
@@ -98,9 +99,18 @@ async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends()):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not active")
 
     debt = session.query(Debt).filter( Debt.id == id, Debt.user_id == current_user.id).first()
+    debt_name_user = debt.debtname.name
     if debt:
         session.delete(debt)
         session.commit()
+
+        # DebtName obektini o'chirish
+        debtname = session.query(DebtName).filter(DebtName.name == debt_name_user).first()
+        if debtname:
+            debts_count = session.query(Debt).filter(Debt.name_id == debtname.id).count()
+            if debts_count == 0:
+                session.delete(debtname)
+                session.commit()
         data = {
             "success": True,
             "code": 204,
@@ -170,3 +180,110 @@ async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: Aut
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"This debt ID {id} is not found")
 
+
+@debt_router.get("/", status_code=status.HTTP_200_OK)
+async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: AuthJWT=Depends()):
+    try:
+        Authorize.jwt_required()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    username = Authorize.get_jwt_subject()
+    current_user = session.query(User).filter(User.username == username).first()
+
+
+    if debt_type != 'individual':
+        # debt_type ni to'liq if-else operatori orqali xaritalash
+        if debt_type == "owed_to":
+            debt_type_code = "OWED_TO"
+        elif debt_type == "owed_by":
+            debt_type_code = "OWED_BY"
+        else:
+            # Notog'ri qiymat berilgan bo'lsa, Exception chiqaramiz
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid debt_type")
+
+        debts = session.query(Debt).filter(
+            Debt.user_id == current_user.id,
+            Debt.debt_type == debt_type_code  # Compare against the code part
+        ).all()
+
+        if not debts:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No debts found")
+        custom_data = [
+            {
+                "user": {
+                    "id": debt.user.id,
+                    "username": debt.user.username
+                },
+                "debt": {
+                    "id": debt.id,
+                    "debt_type": debt.debt_type,
+                    "name": debt.debtname.name,
+                    "amount": debt.amount,
+                    "currency": debt.currency,
+                    "received_or_given_time": debt.received_or_given_time,
+                    "return_time": debt.return_time,
+                }
+            } for debt in debts
+        ]
+        return jsonable_encoder(custom_data)
+
+    elif debt_type == 'individual':
+        debt_names = session.query(DebtName).all()
+        custom_data = []
+        for debt_name in debt_names:
+            owed_to_money = 0
+            owed_by_money = 0
+            debts = session.query(Debt).filter(Debt.name_id == debt_name.id, Debt.user_id == current_user.id).all()
+            for debt in debts:
+                if debt.debt_type == 'OWED_TO':
+                    owed_to_money += debt.amount
+                else:
+                    owed_by_money += debt.amount
+
+            data = {
+                "debt_name_id": debt_name.id,
+                "name": debt_name.name,
+                "owed_to_money": owed_to_money,
+                "owed_by_money": owed_by_money,
+                "total": owed_to_money - owed_by_money
+            }
+            custom_data.append(data)
+        return jsonable_encoder(custom_data)
+
+@debt_router.get('/individual/{id}', status_code=status.HTTP_200_OK)
+async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends()):
+    try:
+        Authorize.jwt_required()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    username = Authorize.get_jwt_subject()
+    current_user = session.query(User).filter(User.username == username).first()
+    debtname = session.query(DebtName).filter(DebtName.id == id).first()
+    if not debtname:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"DebtName with Id {id} not found")
+
+    debts = session.query(Debt).filter(Debt.user_id == current_user.id, Debt.name_id == debtname.id ).all()
+
+    if debts:
+        custom_data = [
+            {
+                "user": {
+                    "id": debt.user.id,
+                    "username": debt.user.username
+                },
+                "debt": {
+                    "id": debt.id,
+                    "debt_type": debt.debt_type.value,
+                    "name": debt.debtname.name,
+                    "amount": debt.amount,
+                    "currency": debt.currency.value,
+                    "received_or_given_time": debt.received_or_given_time,
+                    "return_time": debt.return_time,
+                }
+            } for debt in debts
+        ]
+        return jsonable_encoder(custom_data)
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No debts found")

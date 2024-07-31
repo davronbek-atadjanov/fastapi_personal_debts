@@ -40,7 +40,6 @@ class DebtName(Base):
     # Bog'lanishlar
     debts = relationship('Debt', back_populates='debtname')  # One-to-Many munosabat
 
-
 class Debt(Base):
     DEBT_STATUS = (
         ("OWED_TO", "owed_to"),
