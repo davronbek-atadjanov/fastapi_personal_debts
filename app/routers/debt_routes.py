@@ -10,10 +10,10 @@ from fastapi_jwt_auth import AuthJWT
 from app.database import session
 
 debt_router = APIRouter(
-    prefix="/api/debts"
+    prefix="/api"
 )
 
-@debt_router.post('/create', status_code=status.HTTP_201_CREATED)
+@debt_router.post('/debts/create', status_code=status.HTTP_201_CREATED)
 async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends()):
     try:
         Authorize.jwt_required()
@@ -83,7 +83,7 @@ async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends()):
     }
     return jsonable_encoder(response)
 
-@debt_router.delete('/{id}/delete', status_code=status.HTTP_200_OK)
+@debt_router.delete('/debts/{id}/delete', status_code=status.HTTP_200_OK)
 async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends()):
     try:
         Authorize.get_raw_jwt()
@@ -116,7 +116,7 @@ async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends()):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"This debt ID {id} is not found")
 
 
-@debt_router.put('/{id}/update', status_code=status.HTTP_200_OK)
+@debt_router.put('/debts/{id}/update', status_code=status.HTTP_200_OK)
 async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: AuthJWT=Depends()):
     try:
         Authorize.jwt_required()
@@ -176,7 +176,7 @@ async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: Aut
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"This debt ID {id} is not found")
 
 
-@debt_router.get("/", status_code=status.HTTP_200_OK)
+@debt_router.get("/debts/", status_code=status.HTTP_200_OK)
 async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: AuthJWT=Depends()):
     """debt_type=(owed_to, owed_by, individual): /api/debts/?debt_type=owed_to """
     try:
@@ -245,7 +245,7 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
             custom_data.append(data)
         return jsonable_encoder(custom_data)
 
-@debt_router.get('/individual/{id}', status_code=status.HTTP_200_OK)
+@debt_router.get('/debts/individual/{id}', status_code=status.HTTP_200_OK)
 async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends()):
     try:
         Authorize.jwt_required()
@@ -281,3 +281,41 @@ async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends()):
         return jsonable_encoder(custom_data)
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No debts found")
+
+
+@debt_router.get("/monitoring", status_code=status.HTTP_200_OK)
+async def monitoring_debt(Authorize: AuthJWT=Depends()):
+    try:
+        Authorize.jwt_required()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    username = Authorize.get_jwt_subject()
+    current_user = session.query(User).filter(User.username == username).first()
+
+    debts = session.query(Debt).filter(
+        Debt.user_id == current_user.id,
+    ).all()
+    if debts:
+        owed_to_total = 0
+        owed_by_total = 0
+        for debt in debts:
+            if debt.debt_type == "OWED_TO":
+                owed_to_total += debt.amount
+            else:
+                owed_by_total += debt.amount
+
+        data = {
+            "user": {
+                "user": current_user.id,
+                "username": current_user.username,
+                "debt_monitoring": {
+                    "owed_to_total": owed_to_total,
+                    "owed_by_total": owed_by_total,
+                    "total": owed_to_total - owed_by_total
+                }
+            }
+        }
+        return jsonable_encoder(data)
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debts with not found")
