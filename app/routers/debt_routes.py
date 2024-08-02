@@ -4,17 +4,19 @@ from typing import Optional
 from fastapi import APIRouter, status, Depends, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException
+from sqlalchemy.orm import Session
+
 from app.models import User, DebtName, Debt, Setting
 from app.schemas import DebtModel, DebtUpdateModel
 from fastapi_jwt_auth import AuthJWT
-from app.database import session
+from app.database import get_db
 
 debt_router = APIRouter(
     prefix="/api"
 )
 
 @debt_router.post('/debts/create', status_code=status.HTTP_201_CREATED)
-async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends()):
+async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
@@ -84,7 +86,7 @@ async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends()):
     return jsonable_encoder(response)
 
 @debt_router.delete('/debts/{id}/delete', status_code=status.HTTP_200_OK)
-async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends()):
+async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.get_raw_jwt()
     except Exception as e:
@@ -117,7 +119,7 @@ async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends()):
 
 
 @debt_router.put('/debts/{id}/update', status_code=status.HTTP_200_OK)
-async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: AuthJWT=Depends()):
+async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
@@ -177,7 +179,7 @@ async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: Aut
 
 
 @debt_router.get("/debts/", status_code=status.HTTP_200_OK)
-async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: AuthJWT=Depends()):
+async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     """debt_type=(owed_to, owed_by, individual): /api/debts/?debt_type=owed_to """
     try:
         Authorize.jwt_required()
@@ -246,7 +248,7 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
         return jsonable_encoder(custom_data)
 
 @debt_router.get('/debts/individual/{id}', status_code=status.HTTP_200_OK)
-async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends()):
+async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
@@ -284,7 +286,7 @@ async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends()):
 
 
 @debt_router.get("/monitoring", status_code=status.HTTP_200_OK)
-async def monitoring_debt(Authorize: AuthJWT=Depends()):
+async def monitoring_debt(Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:

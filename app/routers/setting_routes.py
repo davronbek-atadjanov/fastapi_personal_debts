@@ -2,8 +2,9 @@ from fastapi.exceptions import HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi import APIRouter, status, Depends
 from fastapi_jwt_auth import AuthJWT
+from sqlalchemy.orm import Session
 
-from app.database import session
+from app.database import get_db
 from app.models import Setting, User
 from app.schemas import SettingModel
 
@@ -12,7 +13,7 @@ setting_router = APIRouter(
 )
 
 @setting_router.get('/', status_code=status.HTTP_200_OK)
-async def setting_get(Authorize: AuthJWT = Depends()):
+async def setting_get(Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception:
@@ -30,7 +31,7 @@ async def setting_get(Authorize: AuthJWT = Depends()):
             "username": current_user.username,
             "setting": {
                 "id": setting.id,
-                "currency": setting.currency.value,
+                "currency": setting.currency.code,
                 "reminder_time": setting.reminder_time
             }
         }
@@ -40,7 +41,7 @@ async def setting_get(Authorize: AuthJWT = Depends()):
 
 
 @setting_router.put("/", status_code=status.HTTP_200_OK)
-async def update_setting(update_data: SettingModel, Authorize: AuthJWT=Depends()):
+async def update_setting(update_data: SettingModel, Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
@@ -64,7 +65,7 @@ async def update_setting(update_data: SettingModel, Authorize: AuthJWT=Depends()
             "message": f"{username} with setting update",
             "setting": {
                 "id": setting.id,
-                "currency": setting.currency,
+                "currency": setting.currency.code,
                 "reminder_time": setting.reminder_time
             }
         }

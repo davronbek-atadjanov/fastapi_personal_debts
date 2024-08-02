@@ -3,8 +3,6 @@ from datetime import datetime
 from pydantic import BaseModel, validator
 from typing import Optional
 
-from app.models import Setting
-
 
 class SignUpModel(BaseModel):
     id: Optional[int]
