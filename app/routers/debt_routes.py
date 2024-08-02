@@ -346,13 +346,13 @@ async def monitoring_debt(Authorize: AuthJWT=Depends(), session: Session = Depen
 
         data = {
             "user": {
-                "user": current_user.id,
+                "id": current_user.id,
                 "username": current_user.username,
-                "debt_monitoring": {
-                    "owed_to_total": owed_to_total,
-                    "owed_by_total": owed_by_total,
-                    "total": owed_to_total - owed_by_total
-                }
+            },
+            "debt_monitoring": {
+                "owed_to_total": owed_to_total,
+                "owed_by_total": owed_by_total,
+                "total": owed_to_total - owed_by_total
             }
         }
         return jsonable_encoder(data)
