@@ -68,10 +68,10 @@ async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends(), sessio
         "username": new_debt.user.username,
         "debt": {
             "id": new_debt.id,
-            "debt_type": new_debt.debt_type.value,
+            "debt_type": new_debt.debt_type.code,
             "name": new_debt.debtname.name,
             "amount": new_debt.amount,
-            "currency": new_debt.currency.value,
+            "currency": new_debt.currency.code,
             "description": new_debt.description,
             "received_or_given_time": new_debt.received_or_given_time,
             "return_time": new_debt.return_time
@@ -96,8 +96,8 @@ async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends(), session: Sess
     current_user = session.query(User).filter(User.username == username).first()
 
     debt = session.query(Debt).filter( Debt.id == id, Debt.user_id == current_user.id).first()
-    debt_name_user = debt.debtname.name
     if debt:
+        debt_name_user = debt.debtname.name
         session.delete(debt)
         session.commit()
 
@@ -163,10 +163,10 @@ async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: Aut
             "message": f"Debt with ID {id} has been updated",
             "debt": {
                 "id": debt.id,
-                "debt_type": debt.debt_type,
+                "debt_type": debt.debt_type.code,
                 "name": debt.debtname.name,
                 "amount": debt.amount,
-                "currency": debt.currency,
+                "currency": debt.currency.code,
                 "description": debt.description,
                 "received_or_given_time": debt.received_or_given_time,
                 "return_time": debt.return_time,
@@ -213,10 +213,10 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
                 },
                 "debt": {
                     "id": debt.id,
-                    "debt_type": debt.debt_type,
+                    "debt_type": debt.debt_type.code,
                     "name": debt.debtname.name,
                     "amount": debt.amount,
-                    "currency": debt.currency,
+                    "currency": debt.currency.code,
                     "received_or_given_time": debt.received_or_given_time,
                     "return_time": debt.return_time,
                 }
@@ -271,10 +271,10 @@ async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends(), sessio
                 },
                 "debt": {
                     "id": debt.id,
-                    "debt_type": debt.debt_type.value,
+                    "debt_type": debt.debt_type.code,
                     "name": debt.debtname.name,
                     "amount": debt.amount,
-                    "currency": debt.currency.value,
+                    "currency": debt.currency.code,
                     "received_or_given_time": debt.received_or_given_time,
                     "return_time": debt.return_time,
                 }
