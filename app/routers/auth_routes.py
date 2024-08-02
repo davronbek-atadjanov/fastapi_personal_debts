@@ -3,27 +3,30 @@ import datetime
 from fastapi import APIRouter, status, Depends
 from fastapi.exceptions import HTTPException
 from sqlalchemy import or_
-from sqlalchemy_utils.proxy_dict import expire_proxy_dicts
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy.orm import Session
+
 from app.schemas import SignUpModel, Login
 from app.models import User, Setting
-from app.database import session
+from app.database import get_db
 from werkzeug.security import generate_password_hash, check_password_hash
 from fastapi_jwt_auth import AuthJWT
 
 auth_router = APIRouter(
     prefix='/auth'
 )
-@auth_router.post('/signup', status_code=status.HTTP_201_CREATED)
-async def signup(user: SignUpModel):
-    db_email = session.query(User).filter(User.email == user.email).first()
-    if db_email is not None:
-        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists")
-    db_username = session.query(User).filter(User.username == user.username).first()
-    if db_username is not None:
-        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
 
-    new_user =  User(
+
+@auth_router.post('/signup', status_code=status.HTTP_201_CREATED)
+async def signup(user: SignUpModel, session: Session = Depends(get_db)):
+    db_email = session.query(User).filter(user.email == User.email).first()
+    if db_email is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists")
+    db_username = session.query(User).filter(user.username == User.username).first()
+    if db_username is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
+
+    new_user = User(
         username=user.username,
         email=user.email,
         password=generate_password_hash(user.password),
@@ -45,7 +48,7 @@ async def signup(user: SignUpModel):
         "is_active": new_user.is_active,
         "user_setting": {
             "id": new_user.setting.id,
-            "currency": new_user.setting.currency.value,
+            "currency": new_user.setting.currency.code,
             "reminder_time": new_user.setting.reminder_time
         }
     }
@@ -59,7 +62,7 @@ async def signup(user: SignUpModel):
 
 
 @auth_router.post('/login', status_code=status.HTTP_200_OK)
-async def login(user: Login, Authorize: AuthJWT=Depends()):
+async def login(user: Login, Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
     db_user = session.query(User).filter(
         or_(User.username == user.username_or_email,
             User.email == user.username_or_email
@@ -85,4 +88,3 @@ async def login(user: Login, Authorize: AuthJWT=Depends()):
 
         return jsonable_encoder(response)
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid username or password")
-

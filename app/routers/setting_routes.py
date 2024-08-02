@@ -2,8 +2,9 @@ from fastapi.exceptions import HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi import APIRouter, status, Depends
 from fastapi_jwt_auth import AuthJWT
+from sqlalchemy.orm import Session
 
-from app.database import session
+from app.database import get_db
 from app.models import Setting, User
 from app.schemas import SettingModel
 
@@ -11,18 +12,17 @@ setting_router = APIRouter(
     prefix='/api/settings'
 )
 
+
 @setting_router.get('/', status_code=status.HTTP_200_OK)
-async def setting_get(Authorize: AuthJWT = Depends()):
+async def setting_get(Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     username = Authorize.get_jwt_subject()
-    current_user = session.query(User).filter(User.username == username).first()
-
-
-    setting = session.query(Setting).filter(Setting.user_id == current_user.id).first()
+    current_user = session.query(User).filter(username == User.username).first()
+    setting = session.query(Setting).filter(current_user.id == Setting.user_id).first()
 
     if setting:
         data = {
@@ -30,7 +30,7 @@ async def setting_get(Authorize: AuthJWT = Depends()):
             "username": current_user.username,
             "setting": {
                 "id": setting.id,
-                "currency": setting.currency.value,
+                "currency": setting.currency.code,
                 "reminder_time": setting.reminder_time
             }
         }
@@ -40,16 +40,16 @@ async def setting_get(Authorize: AuthJWT = Depends()):
 
 
 @setting_router.put("/", status_code=status.HTTP_200_OK)
-async def update_setting(update_data: SettingModel, Authorize: AuthJWT=Depends()):
+async def update_setting(update_data: SettingModel, Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     username = Authorize.get_jwt_subject()
-    current_user = session.query(User).filter(User.username == username).first()
+    current_user = session.query(User).filter(username == User.username).first()
 
-    setting = session.query(Setting).filter(Setting.user_id == current_user.id).first()
+    setting = session.query(Setting).filter(current_user.id == Setting.user_id).first()
     if setting:
         if update_data.currency is not None:
             setting.currency = update_data.currency
@@ -64,11 +64,10 @@ async def update_setting(update_data: SettingModel, Authorize: AuthJWT=Depends()
             "message": f"{username} with setting update",
             "setting": {
                 "id": setting.id,
-                "currency": setting.currency,
+                "currency": setting.currency.code,
                 "reminder_time": setting.reminder_time
             }
         }
         return jsonable_encoder(data)
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User setting not found")
-

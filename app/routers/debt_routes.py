@@ -4,29 +4,32 @@ from typing import Optional
 from fastapi import APIRouter, status, Depends, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException
+from sqlalchemy.orm import Session
+
 from app.models import User, DebtName, Debt, Setting
 from app.schemas import DebtModel, DebtUpdateModel
 from fastapi_jwt_auth import AuthJWT
-from app.database import session
+from app.database import get_db
 
 debt_router = APIRouter(
     prefix="/api"
 )
 
+
 @debt_router.post('/debts/create', status_code=status.HTTP_201_CREATED)
-async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends()):
+async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     username = Authorize.get_jwt_subject()
-    current_user = session.query(User).filter(User.username == username).first()
-    setting = session.query(Setting).filter(Setting.user_id == current_user.id).first()
+    current_user = session.query(User).filter(username == User.username).first()
+    setting = session.query(Setting).filter(current_user.id == Setting.user_id).first()
     if not current_user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not active")
 
-    current_debtname = session.query(DebtName).filter(DebtName.name == debt_data.name).first()
+    current_debtname = session.query(DebtName).filter(debt_data.name == DebtName.name).first()
 
     if current_debtname is not None:
         name_id = current_debtname.id
@@ -66,10 +69,10 @@ async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends()):
         "username": new_debt.user.username,
         "debt": {
             "id": new_debt.id,
-            "debt_type": new_debt.debt_type.value,
+            "debt_type": new_debt.debt_type.code,
             "name": new_debt.debtname.name,
             "amount": new_debt.amount,
-            "currency": new_debt.currency.value,
+            "currency": new_debt.currency.code,
             "description": new_debt.description,
             "received_or_given_time": new_debt.received_or_given_time,
             "return_time": new_debt.return_time
@@ -83,19 +86,57 @@ async def create_debt(debt_data: DebtModel, Authorize: AuthJWT=Depends()):
     }
     return jsonable_encoder(response)
 
-@debt_router.delete('/debts/{id}/delete', status_code=status.HTTP_200_OK)
-async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends()):
+
+@debt_router.get('/debts/{id}/', status_code=status.HTTP_200_OK)
+async def get_debt_by_id(id: int, Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.get_raw_jwt()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     username = Authorize.get_jwt_subject()
-    current_user = session.query(User).filter(User.username == username).first()
+    current_user = session.query(User).filter(username == User.username).first()
 
-    debt = session.query(Debt).filter( Debt.id == id, Debt.user_id == current_user.id).first()
-    debt_name_user = debt.debtname.name
+    debt = session.query(Debt).filter(id == Debt.id, current_user.id == Debt.user_id).first()
+
     if debt:
+        data = {
+            "id": debt.user.id,
+            "username": debt.user.username,
+            "debt": {
+                "id": debt.id,
+                "debt_type": debt.debt_type.code,
+                "name": debt.debtname.name,
+                "amount": debt.amount,
+                "currency": debt.currency.code,
+                "description": debt.description,
+                "received_or_given_time": debt.received_or_given_time,
+                "return_time": debt.return_time
+            }
+        }
+        response = {
+            "success": True,
+            "code": 200,
+            "message": f"Debt with ID {id} get",
+            "data": data
+        }
+        return jsonable_encoder(response)
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"This debt ID {id} is not found")
+
+@debt_router.delete('/debts/{id}/delete', status_code=status.HTTP_200_OK)
+async def delete_debt_by_id(id: int, Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
+    try:
+        Authorize.get_raw_jwt()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    username = Authorize.get_jwt_subject()
+    current_user = session.query(User).filter(username == User.username).first()
+
+    debt = session.query(Debt).filter(id == Debt.id, current_user.id == Debt.user_id).first()
+    if debt:
+        debt_name_user = debt.debtname.name
         session.delete(debt)
         session.commit()
 
@@ -117,23 +158,23 @@ async def delete_debt_by_id(id: int, Authorize: AuthJWT=Depends()):
 
 
 @debt_router.put('/debts/{id}/update', status_code=status.HTTP_200_OK)
-async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: AuthJWT=Depends()):
+async def update_debt_by_id(id: int, update_data: DebtUpdateModel, Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     username = Authorize.get_jwt_subject()
-    current_user = session.query(User).filter(User.username == username).first()
-    debt = session.query(Debt).filter(Debt.id == id, Debt.user_id == current_user.id).first()
+    current_user = session.query(User).filter(username == User.username).first()
+    debt = session.query(Debt).filter(id == Debt.id, current_user.id == Debt.user_id).first()
 
     if debt:
         debtname = session.query(DebtName).filter(DebtName.name == debt.debtname.name).first()
-        setting = session.query(Setting).filter(Setting.user_id == current_user.id).first()
+        setting = session.query(Setting).filter(current_user.id == Setting.user_id).first()
         # update debt name
         if update_data.name is not None:
             debtname.name = update_data.name
-            debtname_check = session.query(DebtName).filter(DebtName.name == debtname.name).first()
+            debtname_check = session.query(DebtName).filter(debtname.name == DebtName.name).first()
             if debtname_check is None:
                 new_debtname = DebtName(
                     name=debtname.name
@@ -161,10 +202,10 @@ async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: Aut
             "message": f"Debt with ID {id} has been updated",
             "debt": {
                 "id": debt.id,
-                "debt_type": debt.debt_type,
+                "debt_type": debt.debt_type.code,
                 "name": debt.debtname.name,
                 "amount": debt.amount,
-                "currency": debt.currency,
+                "currency": debt.currency.code,
                 "description": debt.description,
                 "received_or_given_time": debt.received_or_given_time,
                 "return_time": debt.return_time,
@@ -177,7 +218,7 @@ async def update_debt_by_id(id:int, update_data: DebtUpdateModel, Authorize: Aut
 
 
 @debt_router.get("/debts/", status_code=status.HTTP_200_OK)
-async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: AuthJWT=Depends()):
+async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     """debt_type=(owed_to, owed_by, individual): /api/debts/?debt_type=owed_to """
     try:
         Authorize.jwt_required()
@@ -185,7 +226,7 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     username = Authorize.get_jwt_subject()
-    current_user = session.query(User).filter(User.username == username).first()
+    current_user = session.query(User).filter(username == User.username).first()
 
 
     if debt_type != 'individual':
@@ -196,10 +237,7 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
         else:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid debt_type")
 
-        debts = session.query(Debt).filter(
-            Debt.user_id == current_user.id,
-            Debt.debt_type == debt_type_code
-        ).all()
+        debts = session.query(Debt).filter(current_user.id == Debt.user_id, debt_type_code == Debt.debt_type).all()
 
         if not debts:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No debts found")
@@ -211,10 +249,10 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
                 },
                 "debt": {
                     "id": debt.id,
-                    "debt_type": debt.debt_type,
+                    "debt_type": debt.debt_type.code,
                     "name": debt.debtname.name,
                     "amount": debt.amount,
-                    "currency": debt.currency,
+                    "currency": debt.currency.code,
                     "received_or_given_time": debt.received_or_given_time,
                     "return_time": debt.return_time,
                 }
@@ -228,7 +266,7 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
         for debt_name in debt_names:
             owed_to_money = 0
             owed_by_money = 0
-            debts = session.query(Debt).filter(Debt.name_id == debt_name.id, Debt.user_id == current_user.id).all()
+            debts = session.query(Debt).filter(Debt.name_id == debt_name.id, current_user.id == Debt.user_id).all()
             for debt in debts:
                 if debt.debt_type == 'OWED_TO':
                     owed_to_money += debt.amount
@@ -245,20 +283,21 @@ async def debt_type_debt_all(debt_type: Optional[str] = Query(None), Authorize: 
             custom_data.append(data)
         return jsonable_encoder(custom_data)
 
+
 @debt_router.get('/debts/individual/{id}', status_code=status.HTTP_200_OK)
-async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends()):
+async def individual_debt_name_by_id(id: int, Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     username = Authorize.get_jwt_subject()
-    current_user = session.query(User).filter(User.username == username).first()
-    debtname = session.query(DebtName).filter(DebtName.id == id).first()
+    current_user = session.query(User).filter(username == User.username).first()
+    debtname = session.query(DebtName).filter(id == DebtName.id).first()
     if not debtname:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"DebtName with Id {id} not found")
 
-    debts = session.query(Debt).filter(Debt.user_id == current_user.id, Debt.name_id == debtname.id ).all()
+    debts = session.query(Debt).filter(current_user.id == Debt.user_id, Debt.name_id == debtname.id).all()
 
     if debts:
         custom_data = [
@@ -269,10 +308,10 @@ async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends()):
                 },
                 "debt": {
                     "id": debt.id,
-                    "debt_type": debt.debt_type.value,
+                    "debt_type": debt.debt_type.code,
                     "name": debt.debtname.name,
                     "amount": debt.amount,
-                    "currency": debt.currency.value,
+                    "currency": debt.currency.code,
                     "received_or_given_time": debt.received_or_given_time,
                     "return_time": debt.return_time,
                 }
@@ -284,17 +323,17 @@ async def individual_debtname_by_id(id:int, Authorize: AuthJWT=Depends()):
 
 
 @debt_router.get("/monitoring", status_code=status.HTTP_200_OK)
-async def monitoring_debt(Authorize: AuthJWT=Depends()):
+async def monitoring_debt(Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
     try:
         Authorize.jwt_required()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     username = Authorize.get_jwt_subject()
-    current_user = session.query(User).filter(User.username == username).first()
+    current_user = session.query(User).filter(username == User.username).first()
 
     debts = session.query(Debt).filter(
-        Debt.user_id == current_user.id,
+        current_user.id == Debt.user_id,
     ).all()
     if debts:
         owed_to_total = 0
@@ -307,13 +346,13 @@ async def monitoring_debt(Authorize: AuthJWT=Depends()):
 
         data = {
             "user": {
-                "user": current_user.id,
+                "id": current_user.id,
                 "username": current_user.username,
-                "debt_monitoring": {
-                    "owed_to_total": owed_to_total,
-                    "owed_by_total": owed_by_total,
-                    "total": owed_to_total - owed_by_total
-                }
+            },
+            "debt_monitoring": {
+                "owed_to_total": owed_to_total,
+                "owed_by_total": owed_by_total,
+                "total": owed_to_total - owed_by_total
             }
         }
         return jsonable_encoder(data)
