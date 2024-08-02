@@ -15,12 +15,14 @@ from fastapi_jwt_auth import AuthJWT
 auth_router = APIRouter(
     prefix='/auth'
 )
+
+
 @auth_router.post('/signup', status_code=status.HTTP_201_CREATED)
 async def signup(user: SignUpModel, session: Session = Depends(get_db)):
-    db_email = session.query(User).filter(User.email == user.email).first()
+    db_email = session.query(User).filter(user.email == User.email).first()
     if db_email is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this email already exists")
-    db_username = session.query(User).filter(User.username == user.username).first()
+    db_username = session.query(User).filter(user.username == User.username).first()
     if db_username is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User with this username already exists")
 
@@ -60,7 +62,7 @@ async def signup(user: SignUpModel, session: Session = Depends(get_db)):
 
 
 @auth_router.post('/login', status_code=status.HTTP_200_OK)
-async def login(user: Login, Authorize: AuthJWT=Depends(), session: Session = Depends(get_db)):
+async def login(user: Login, Authorize: AuthJWT = Depends(), session: Session = Depends(get_db)):
     db_user = session.query(User).filter(
         or_(User.username == user.username_or_email,
             User.email == user.username_or_email
@@ -86,4 +88,3 @@ async def login(user: Login, Authorize: AuthJWT=Depends(), session: Session = De
 
         return jsonable_encoder(response)
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid username or password")
-
